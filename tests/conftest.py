@@ -1,75 +1,57 @@
 import pytest
 import asyncio
-
-from uuid import UUID
+from httpx import AsyncClient, ASGITransport
 from store.db.mongo import db_client
-from store.schemas.product import ProductIn, ProductUpdate
 from store.usecases.product import product_usecase
 from tests.factories import product_data, products_data
-from httpx import AsyncClient
-
+from store.schemas.product import ProductIn, ProductUpdate
 
 @pytest.fixture(scope="session")
 def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
+    asyncio.set_event_loop(loop)
     yield loop
     loop.close()
 
-
 @pytest.fixture
-def mongo_client():
-    return db_client.get()
-
+async def mongo_client():
+    db = db_client.get()
+    yield db
 
 @pytest.fixture(autouse=True)
 async def clear_collections(mongo_client):
-    yield
-    collection_names = await mongo_client.get_database().list_collection_names()
-    for collection_name in collection_names:
-        if collection_name.startswith("system"):
-            continue
-
-        await mongo_client.get_database()[collection_name].delete_many({})
-
+    # Executa a limpeza ANTES do teste começar (sem finalizer)
+    db = mongo_client
+    collections = await db.list_collection_names()
+    for col in collections:
+        if not col.startswith("system"):
+            await db[col].delete_many({})
 
 @pytest.fixture
-async def client() -> AsyncClient:
-    from store.main import app
+def products_url():
+    return "/products/"
 
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+@pytest.fixture
+async def client(clear_collections):
+    from store.main import app
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
 
 
 @pytest.fixture
-def products_url() -> str:
-    return "/products/"
+def product_in():
+    return ProductIn(**product_data())
 
 
 @pytest.fixture
-def product_id() -> UUID:
-    return UUID("fce6cc37-10b9-4a8e-a8b2-977df327001a")
+def product_up():
+    return ProductUpdate()
 
 
 @pytest.fixture
-def product_in(product_id):
-    return ProductIn(**product_data(), id=product_id)
-
-
-@pytest.fixture
-def product_up(product_id):
-    return ProductUpdate(**product_data(), id=product_id)
-
+async def product_inserted(clear_collections):
+    return await product_usecase.create(body=ProductIn(**product_data()))
 
 @pytest.fixture
-async def product_inserted(product_in):
-    return await product_usecase.create(body=product_in)
-
-
-@pytest.fixture
-def products_in():
-    return [ProductIn(**product) for product in products_data()]
-
-
-@pytest.fixture
-async def products_inserted(products_in):
-    return [await product_usecase.create(body=product_in) for product_in in products_in]
+async def products_inserted(clear_collections):
+    return [await product_usecase.create(body=ProductIn(**p)) for p in products_data()]

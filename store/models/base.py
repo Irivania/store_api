@@ -1,15 +1,17 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 import uuid
 from bson import Decimal128
-from pydantic import UUID4, BaseModel, Field, model_serializer
+from pydantic import UUID4, BaseModel, ConfigDict, Field, model_serializer
 
 
 class CreateBaseModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID4 = Field(default_factory=uuid.uuid4)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @model_serializer
     def set_model(self) -> dict[str, Any]:

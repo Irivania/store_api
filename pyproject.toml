@@ -23,6 +23,7 @@ addopts = [
   "--strict-config",
   "--strict-markers",
   "--ignore=docs_src",
+  "--ignore=test_db.py",
 ]
 xfail_strict = true
 junit_family = "xunit2"

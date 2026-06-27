@@ -1,0 +1,1 @@
+from store.db.mongo import db_client; import asyncio; async def test(): client = db_client.get(); await client.admin().command('ping'); print('Sucesso!'); await client.close(); asyncio.run(test())

@@ -1,14 +1,23 @@
 from decimal import Decimal
 from typing import Annotated, Optional
 from bson import Decimal128
-from pydantic import AfterValidator, Field
+from pydantic import AfterValidator, Field, field_serializer, field_validator
 from store.schemas.base import BaseSchemaMixin, OutSchema
+
+
+def convert_decimal_128(v):
+    if isinstance(v, Decimal128):
+        return Decimal(str(v))
+    return v
+
+
+Decimal_ = Annotated[Decimal, AfterValidator(convert_decimal_128)]
 
 
 class ProductBase(BaseSchemaMixin):
     name: str = Field(..., description="Product name")
     quantity: int = Field(..., description="Product quantity")
-    price: Decimal = Field(..., description="Product price")
+    price: Decimal_ = Field(..., description="Product price")
     status: bool = Field(..., description="Product status")
 
 
@@ -17,14 +26,17 @@ class ProductIn(ProductBase, BaseSchemaMixin):
 
 
 class ProductOut(ProductIn, OutSchema):
-    ...
+    @field_validator("price", mode="before")
+    def convert_price_decimal128(cls, value):
+        if isinstance(value, Decimal128):
+            return Decimal(str(value))
+        return value
 
-
-def convert_decimal_128(v):
-    return Decimal128(str(v))
-
-
-Decimal_ = Annotated[Decimal, AfterValidator(convert_decimal_128)]
+    @field_serializer("price")
+    def serialize_price(self, value):
+        if isinstance(value, (Decimal, Decimal128)):
+            return str(value)
+        return value
 
 
 class ProductUpdate(BaseSchemaMixin):
